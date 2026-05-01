@@ -25,11 +25,40 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # ================= BACA FILE (SUPER FLEXIBLE) =================
         try:
-            if file_name.lower().endswith(".csv"):
-                df = pd.read_csv(file_name)
-            else:
-                df = pd.read_excel(file_name)
-        except:
+# ================= SUPER FILE READER =================
+df = None
+
+# coba csv normal
+try:
+    df = pd.read_csv(file_name)
+except:
+    pass
+
+# coba csv delimiter ;
+if df is None:
+    try:
+        df = pd.read_csv(file_name, delimiter=";")
+    except:
+        pass
+
+# coba auto detect
+if df is None:
+    try:
+        df = pd.read_csv(file_name, sep=None, engine="python")
+    except:
+        pass
+
+# coba excel
+if df is None:
+    try:
+        df = pd.read_excel(file_name, engine="openpyxl")
+    except:
+        pass
+
+# kalau masih gagal
+if df is None:
+    await update.message.reply_text("❌ Format file tidak bisa dibaca (broker aneh)")
+    return        except:
             # fallback (kalau format aneh)
             try:
                 df = pd.read_csv(file_name, sep=None, engine="python")

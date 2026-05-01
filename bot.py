@@ -12,6 +12,48 @@ if not BOT_TOKEN:
 db = Database()
 
 
+# ================= FILE READER =================
+def read_file(file_name):
+    df = None
+
+    # CSV utf-8
+    try:
+        df = pd.read_csv(file_name, encoding="utf-8", on_bad_lines="skip")
+        return df
+    except:
+        pass
+
+    # CSV latin
+    try:
+        df = pd.read_csv(file_name, encoding="latin1", on_bad_lines="skip")
+        return df
+    except:
+        pass
+
+    # CSV delimiter ;
+    try:
+        df = pd.read_csv(file_name, delimiter=";", encoding="latin1", on_bad_lines="skip")
+        return df
+    except:
+        pass
+
+    # auto detect
+    try:
+        df = pd.read_csv(file_name, sep=None, engine="python", on_bad_lines="skip")
+        return df
+    except:
+        pass
+
+    # Excel paksa
+    try:
+        df = pd.read_excel(file_name, engine="openpyxl")
+        return df
+    except:
+        pass
+
+    return None
+
+
 # ================= UPLOAD FILE =================
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -20,50 +62,16 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file = await update.message.document.get_file()
         file_name = update.message.document.file_name
 
-        # simpan file
+        # FIX nama file aneh
+        file_name = file_name.replace(".csv.xlsx", ".csv")
+
         await file.download_to_drive(file_name)
 
-        # ================= BACA FILE (SUPER FLEXIBLE) =================
-        try:
-# ================= SUPER FILE READER =================
-df = None
+        df = read_file(file_name)
 
-# coba csv normal
-try:
-    df = pd.read_csv(file_name)
-except:
-    pass
-
-# coba csv delimiter ;
-if df is None:
-    try:
-        df = pd.read_csv(file_name, delimiter=";")
-    except:
-        pass
-
-# coba auto detect
-if df is None:
-    try:
-        df = pd.read_csv(file_name, sep=None, engine="python")
-    except:
-        pass
-
-# coba excel
-if df is None:
-    try:
-        df = pd.read_excel(file_name, engine="openpyxl")
-    except:
-        pass
-
-# kalau masih gagal
-if df is None:
-    await update.message.reply_text("❌ Format file tidak bisa dibaca (broker aneh)")
-    return        except:
-            # fallback (kalau format aneh)
-            try:
-                df = pd.read_csv(file_name, sep=None, engine="python")
-            except:
-                df = pd.read_excel(file_name)
+        if df is None:
+            await update.message.reply_text("❌ File tidak bisa dibaca")
+            return
 
         print("COLUMNS:", df.columns.tolist())
         print(df.head())
@@ -88,7 +96,7 @@ if df is None:
                 if "@" in val:
                     email = val.lower()
 
-                # ACCOUNT (angka)
+                # ACCOUNT
                 elif val.replace(".", "").isdigit():
                     val_clean = val.replace(".0", "").replace(" ", "")
                     if len(val_clean) >= 5:
@@ -109,7 +117,7 @@ if df is None:
         await update.message.reply_text(f"❌ Error: {e}")
 
 
-# ================= CEK CLIENT =================
+# ================= CEK =================
 async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         print("🔍 CEK DIPANGGIL")
@@ -119,7 +127,6 @@ async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         keyword = context.args[0].lower().strip()
-        print("KEYWORD:", keyword)
 
         results = db.find_client(keyword)
 
@@ -136,15 +143,15 @@ async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         print("ERROR CEK:", e)
-        await update.message.reply_text("❌ Error saat cek data")
+        await update.message.reply_text("❌ Error saat cek")
 
 
 # ================= START =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🤖 Bot Validasi Client FXPayout\n\n"
-        "📤 Upload CSV / Excel broker\n"
-        "🔍 /cek <email / akun / nama>"
+        "📤 Upload CSV / Excel\n"
+        "🔍 /cek <data>"
     )
 
 

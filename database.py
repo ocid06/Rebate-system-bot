@@ -4,74 +4,32 @@ class Database:
     def __init__(self):
         self.conn = sqlite3.connect("data.db", check_same_thread=False)
         self.cursor = self.conn.cursor()
-        self.create_tables()
+        self.create_table()
 
-    def create_tables(self):
+    def create_table(self):
         self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS clients (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            broker TEXT,
-            nomor_akun_trading TEXT,
-            nama TEXT,
+            account TEXT,
             email TEXT,
-            UNIQUE(nomor_akun_trading, broker)
+            nama TEXT
         )
         """)
-
-        self.cursor.execute("""
-        CREATE TABLE IF NOT EXISTS rebates (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nomor_akun_trading TEXT,
-            rebate REAL
-        )
-        """)
-
         self.conn.commit()
 
-    def upsert_client(self, data):
-        akun = data["nomor_akun_trading"]
-        broker = data["broker"]
-
+    def insert_client(self, account="", email="", nama=""):
         self.cursor.execute("""
-        SELECT id FROM clients WHERE nomor_akun_trading=? AND broker=?
-        """, (akun, broker))
-
-        existing = self.cursor.fetchone()
-
-        if existing:
-            self.cursor.execute("""
-            UPDATE clients SET nama=?, email=? WHERE id=?
-            """, (data["nama"], data["email"], existing[0]))
-        else:
-            self.cursor.execute("""
-            INSERT INTO clients (broker, nomor_akun_trading, nama, email)
-            VALUES (?, ?, ?, ?)
-            """, (broker, akun, data["nama"], data["email"]))
-
+        INSERT INTO clients (account, email, nama)
+        VALUES (?, ?, ?)
+        """, (account, email, nama))
         self.conn.commit()
 
-    def insert_rebate(self, akun, rebate):
+    def find_client(self, keyword):
+        q = f"%{keyword}%"
+
         self.cursor.execute("""
-        INSERT INTO rebates (nomor_akun_trading, rebate)
-        VALUES (?, ?)
-        """, (akun, rebate))
-        self.conn.commit()
+        SELECT * FROM clients WHERE
+        account LIKE ? OR email LIKE ? OR nama LIKE ?
+        """, (q, q, q))
 
-    def get_total_rebate(self, akun):
-        self.cursor.execute("""
-        SELECT SUM(rebate) FROM rebates WHERE nomor_akun_trading=?
-        """, (akun,))
-        result = self.cursor.fetchone()[0]
-        return result or 0
-
-def find_accounts(self, keyword):
-    q = f"%{keyword}%"
-
-    self.cursor.execute("""
-    SELECT nomor_akun_trading FROM clients
-    WHERE email LIKE ? OR nama LIKE ? OR nomor_akun_trading LIKE ?
-    """, (q, q, q))
-
-    rows = self.cursor.fetchall()
-
-    return list(set([r[0] for r in rows]))
+        return self.cursor.fetchall()

@@ -1,4 +1,3 @@
-import re
 import pandas as pd
 import os
 from telegram import Update
@@ -8,87 +7,73 @@ from database import Database
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 if not BOT_TOKEN:
-    raise ValueError("❌ BOT_TOKEN tidak terbaca dari environment!")
+    raise ValueError("❌ BOT_TOKEN tidak terbaca")
 
 db = Database()
 
-# ================= PARSE =================
-def parse_text(text):
-    text = text.lower()
-
-    def ambil(label):
-        match = re.search(rf"{label}\s*:\s*(.+)", text)
-        return match.group(1).strip() if match else ""
-
-    return {
-        "broker": ambil("broker"),
-        "nomor_akun_trading": ambil("nomor akun trading"),
-        "nama": ambil("nama lengkap"),
-        "email": ambil("email"),
-    }
-
-# ================= INPUT CLIENT =================
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-
-    data = parse_text(text)
-
-    if not data["nomor_akun_trading"]:
-        return
-
-    db.upsert_client(data)
-
-    await update.message.reply_text("✅ Client disimpan")
-
-# ================= UPLOAD REBATE =================
+# ================= UPLOAD CSV =================
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file = await update.message.document.get_file()
-    await file.download_to_drive("rebate.csv")
+    await file.download_to_drive("data.csv")
 
-    df = pd.read_csv("rebate.csv")
+    df = pd.read_csv("data.csv")
     df.columns = [c.lower() for c in df.columns]
 
     account_col = None
-    rebate_col = None
+    email_col = None
+    name_col = None
 
     for col in df.columns:
-        if "account" in col or "login" in col:
+        if any(k in col for k in ["account", "login", "wallet"]):
             account_col = col
-
-        if "rebate" in col or "commission" in col or "profit" in col:
-            rebate_col = col
+        if "email" in col:
+            email_col = col
+        if any(k in col for k in ["name", "nama"]):
+            name_col = col
 
     inserted = 0
 
     for _, row in df.iterrows():
-        akun = str(row[account_col])
-        rebate = float(row[rebate_col])
+        account = str(row[account_col]) if account_col else ""
+        email = str(row[email_col]) if email_col else ""
+        nama = str(row[name_col]) if name_col else ""
 
-        if akun:
-            db.insert_rebate(akun, rebate)
+        if account or email:
+            db.insert_client(account, email, nama)
             inserted += 1
 
-    await update.message.reply_text(f"✅ {inserted} rebate masuk")
+    await update.message.reply_text(f"✅ {inserted} data client masuk")
 
-# ================= REBATE COMMAND =================
-async def rebate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ================= CEK CLIENT =================
+async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("Gunakan: /rebate 123456 atau email")
+        await update.message.reply_text("Gunakan: /cek email / akun / nama")
         return
 
     keyword = context.args[0]
 
-    accounts = db.find_accounts(keyword)
+    results = db.find_client(keyword)
 
-    if not accounts:
-        await update.message.reply_text("❌ Data tidak ditemukan")
+    if not results:
+        await update.message.reply_text("❌ Tidak terdaftar di IB FXPayout")
         return
 
-    total = 0
+    text = "✅ TERDAFTAR DI IB FXPAYOUT\n\n"
 
-    for acc in accounts:
-        total += db.get_total_rebate(acc)
+    for r in results:
+        text += f"Akun: {r[1]}\nEmail: {r[2]}\nNama: {r[3]}\n\n"
 
-    final = total * 0.7
+    await update.message.reply_text(text)
 
-    await update.message.reply_text(f"💰 ${final:.2f}")
+# ================= MAIN =================
+def main():
+    app = Application.builder().token(BOT_TOKEN).build()
+
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_file))
+    app.add_handler(CommandHandler("cek", cek))
+
+    print("Bot validasi jalan...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()

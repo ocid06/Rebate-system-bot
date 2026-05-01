@@ -17,33 +17,59 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await file.download_to_drive("data.csv")
 
     df = pd.read_csv("data.csv")
-    df.columns = [c.lower() for c in df.columns]
+
+    # DEBUG: lihat nama kolom
+    print("COLUMNS:", df.columns.tolist())
+
+    # normalisasi nama kolom
+    df.columns = [c.lower().strip() for c in df.columns]
 
     account_col = None
     email_col = None
     name_col = None
 
+    # ================= DETECT KOLOM =================
     for col in df.columns:
-        if any(k in col for k in ["account", "login", "wallet"]):
+        if any(k in col for k in ["account", "login", "wallet", "id", "uid"]):
             account_col = col
+
         if "email" in col:
             email_col = col
+
         if any(k in col for k in ["name", "nama"]):
             name_col = col
 
+    # ================= VALIDASI =================
+    if not account_col and not email_col:
+        await update.message.reply_text(
+            f"❌ Kolom tidak dikenali\n\nKolom:\n{df.columns.tolist()}"
+        )
+        return
+
     inserted = 0
 
+    # ================= INSERT =================
     for _, row in df.iterrows():
-        account = str(row[account_col]) if account_col else ""
-        email = str(row[email_col]) if email_col else ""
-        nama = str(row[name_col]) if name_col else ""
+        account = str(row[account_col]).strip() if account_col else ""
+        email = str(row[email_col]).strip() if email_col else ""
+        nama = str(row[name_col]).strip() if name_col else ""
+
+        # bersihin data
+        if account == "nan":
+            account = ""
+        if email == "nan":
+            email = ""
+
+        if account.endswith(".0"):
+            account = account[:-2]
+
+        account = account.replace(" ", "")
 
         if account or email:
             db.insert_client(account, email, nama)
             inserted += 1
 
     await update.message.reply_text(f"✅ {inserted} data client masuk")
-
 # ================= CEK CLIENT =================
 async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:

@@ -11,66 +11,106 @@ if not BOT_TOKEN:
 
 db = Database()
 
-# ================= UPLOAD CSV =================
+# ================= UPLOAD FILE =================
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    file = await update.message.document.get_file()
-    file_name = update.message.document.file_name.lower()
-
-    # download sekali saja
-    await file.download_to_drive(file_name)
-
-    # ================= DETECT FORMAT =================
     try:
+        file = await update.message.document.get_file()
+        file_name = update.message.document.file_name.lower()
+
+        # download file
+        await file.download_to_drive(file_name)
+
+        # ================= DETECT FORMAT =================
         if file_name.endswith(".csv"):
             df = pd.read_csv(file_name)
 
         elif file_name.endswith(".xlsx") or file_name.endswith(".xls"):
             df = pd.read_excel(file_name)
 
-        elif file_name.endswith(".txt"):
-            df = pd.read_csv(file_name, delimiter=";")
-
         else:
-            await update.message.reply_text("❌ Format file tidak didukung")
+            await update.message.reply_text("❌ Format tidak didukung")
             return
 
+        df.columns = [c.lower().strip() for c in df.columns]
+
+        inserted = 0
+
+        # ================= SMART PARSER =================
+        for _, row in df.iterrows():
+            account = ""
+            email = ""
+            nama = ""
+
+            for col in df.columns:
+                val = str(row[col]).strip()
+
+                if val.lower() == "nan" or val == "":
+                    continue
+
+                # EMAIL
+                if "@" in val:
+                    email = val.lower()
+
+                # ACCOUNT (angka panjang)
+                elif val.replace(".", "").isdigit() and len(val) >= 5:
+                    account = val.replace(".0", "").replace(" ", "")
+
+                # NAMA
+                elif any(c.isalpha() for c in val) and len(val) > 3:
+                    nama = val
+
+            if account or email:
+                db.insert_client(account, email, nama)
+                inserted += 1
+
+        await update.message.reply_text(f"✅ {inserted} data client masuk")
+
     except Exception as e:
-        await update.message.reply_text(f"❌ Gagal membaca file: {e}")
+        await update.message.reply_text(f"❌ Error: {e}")
+
+
+# ================= CEK CLIENT =================
+async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("Gunakan: /cek email / akun / nama")
         return
 
-    # ================= DEBUG =================
-    print("COLUMNS:", df.columns.tolist())
+    keyword = context.args[0].lower().strip()
 
-    df.columns = [c.lower().strip() for c in df.columns]
+    results = db.find_client(keyword)
 
-    inserted = 0
+    if not results:
+        await update.message.reply_text("❌ Tidak terdaftar di IB FXPayout")
+        return
 
-    # ================= SMART PARSER =================
-    for _, row in df.iterrows():
-        account = ""
-        email = ""
-        nama = ""
+    text = "✅ TERDAFTAR DI IB FXPAYOUT\n\n"
 
-        for col in df.columns:
-            val = str(row[col]).strip()
+    for r in results:
+        text += f"Akun: {r[1]}\nEmail: {r[2]}\nNama: {r[3]}\n\n"
 
-            if val.lower() == "nan" or val == "":
-                continue
+    await update.message.reply_text(text)
 
-            # EMAIL
-            if "@" in val:
-                email = val
 
-            # ACCOUNT (angka panjang)
-            elif val.replace(".", "").isdigit():
-                account = val.replace(".0", "")
+# ================= START =================
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🤖 Bot Validasi Client FXPayout\n\n"
+        "📤 Upload CSV / Excel broker\n"
+        "🔍 /cek <email / akun / nama>"
+    )
 
-            # NAMA
-            elif any(c.isalpha() for c in val) and len(val) > 3:
-                nama = val
 
-        if account or email:
-            db.insert_client(account, email, nama)
-            inserted += 1
+# ================= MAIN =================
+def main():
+    app = Application.builder().token(BOT_TOKEN).build()
 
-    await update.message.reply_text(f"✅ {inserted} data client masuk")
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("cek", cek))
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_file))
+
+    print("🤖 Bot jalan...")
+    app.run_polling()
+
+
+if __name__ == "__main__":
+    main()

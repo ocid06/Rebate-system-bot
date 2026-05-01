@@ -63,3 +63,15 @@ class Database:
         """, (akun,))
         result = self.cursor.fetchone()[0]
         return result or 0
+
+def find_accounts(self, keyword):
+    q = f"%{keyword}%"
+
+    self.cursor.execute("""
+    SELECT nomor_akun_trading FROM clients
+    WHERE email LIKE ? OR nama LIKE ? OR nomor_akun_trading LIKE ?
+    """, (q, q, q))
+
+    rows = self.cursor.fetchall()
+
+    return list(set([r[0] for r in rows]))

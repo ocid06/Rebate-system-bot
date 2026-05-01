@@ -72,23 +72,23 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ================= REBATE COMMAND =================
 async def rebate(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    akun = context.args[0]
+    if not context.args:
+        await update.message.reply_text("Gunakan: /rebate 123456 atau email")
+        return
 
-    total = db.get_total_rebate(akun)
+    keyword = context.args[0]
+
+    accounts = db.find_accounts(keyword)
+
+    if not accounts:
+        await update.message.reply_text("❌ Data tidak ditemukan")
+        return
+
+    total = 0
+
+    for acc in accounts:
+        total += db.get_total_rebate(acc)
+
     final = total * 0.7
 
     await update.message.reply_text(f"💰 ${final:.2f}")
-
-# ================= MAIN =================
-def main():
-    app = Application.builder().token(BOT_TOKEN).build()
-
-    app.add_handler(MessageHandler(filters.TEXT, handle_text))
-    app.add_handler(MessageHandler(filters.Document.ALL, handle_file))
-    app.add_handler(CommandHandler("rebate", rebate))
-
-    print("Bot jalan...")
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()

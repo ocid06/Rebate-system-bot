@@ -11,31 +11,39 @@ if not BOT_TOKEN:
 
 db = Database()
 
+
 # ================= UPLOAD FILE =================
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        file = await update.message.document.get_file()
-        file_name = update.message.document.file_name.lower()
+        print("📥 FILE MASUK")
 
-        # download file
+        file = await update.message.document.get_file()
+        file_name = update.message.document.file_name
+
+        # simpan file
         await file.download_to_drive(file_name)
 
-        # ================= DETECT FORMAT =================
-        if file_name.endswith(".csv"):
-            df = pd.read_csv(file_name)
+        # ================= BACA FILE (SUPER FLEXIBLE) =================
+        try:
+            if file_name.lower().endswith(".csv"):
+                df = pd.read_csv(file_name)
+            else:
+                df = pd.read_excel(file_name)
+        except:
+            # fallback (kalau format aneh)
+            try:
+                df = pd.read_csv(file_name, sep=None, engine="python")
+            except:
+                df = pd.read_excel(file_name)
 
-        elif file_name.endswith(".xlsx") or file_name.endswith(".xls"):
-            df = pd.read_excel(file_name)
-
-        else:
-            await update.message.reply_text("❌ Format tidak didukung")
-            return
+        print("COLUMNS:", df.columns.tolist())
+        print(df.head())
 
         df.columns = [c.lower().strip() for c in df.columns]
 
         inserted = 0
 
-        # ================= SMART PARSER =================
+        # ================= PARSER =================
         for _, row in df.iterrows():
             account = ""
             email = ""
@@ -44,16 +52,18 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for col in df.columns:
                 val = str(row[col]).strip()
 
-                if val.lower() == "nan" or val == "":
+                if not val or val.lower() == "nan":
                     continue
 
                 # EMAIL
                 if "@" in val:
                     email = val.lower()
 
-                # ACCOUNT (angka panjang)
-                elif val.replace(".", "").isdigit() and len(val) >= 5:
-                    account = val.replace(".0", "").replace(" ", "")
+                # ACCOUNT (angka)
+                elif val.replace(".", "").isdigit():
+                    val_clean = val.replace(".0", "").replace(" ", "")
+                    if len(val_clean) >= 5:
+                        account = val_clean
 
                 # NAMA
                 elif any(c.isalpha() for c in val) and len(val) > 3:
@@ -66,29 +76,38 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ {inserted} data client masuk")
 
     except Exception as e:
+        print("ERROR:", e)
         await update.message.reply_text(f"❌ Error: {e}")
 
 
 # ================= CEK CLIENT =================
 async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("Gunakan: /cek email / akun / nama")
-        return
+    try:
+        print("🔍 CEK DIPANGGIL")
 
-    keyword = context.args[0].lower().strip()
+        if not context.args:
+            await update.message.reply_text("Gunakan: /cek email / akun / nama")
+            return
 
-    results = db.find_client(keyword)
+        keyword = context.args[0].lower().strip()
+        print("KEYWORD:", keyword)
 
-    if not results:
-        await update.message.reply_text("❌ Tidak terdaftar di IB FXPayout")
-        return
+        results = db.find_client(keyword)
 
-    text = "✅ TERDAFTAR DI IB FXPAYOUT\n\n"
+        if not results:
+            await update.message.reply_text("❌ Tidak terdaftar di IB FXPayout")
+            return
 
-    for r in results:
-        text += f"Akun: {r[1]}\nEmail: {r[2]}\nNama: {r[3]}\n\n"
+        text = "✅ TERDAFTAR DI IB FXPAYOUT\n\n"
 
-    await update.message.reply_text(text)
+        for r in results:
+            text += f"Akun: {r[1]}\nEmail: {r[2]}\nNama: {r[3]}\n\n"
+
+        await update.message.reply_text(text)
+
+    except Exception as e:
+        print("ERROR CEK:", e)
+        await update.message.reply_text("❌ Error saat cek data")
 
 
 # ================= START =================

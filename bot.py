@@ -7,6 +7,9 @@ from database import Database
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
+if not BOT_TOKEN:
+    raise ValueError("❌ BOT_TOKEN tidak terbaca dari environment!")
+
 db = Database()
 
 # ================= PARSE =================

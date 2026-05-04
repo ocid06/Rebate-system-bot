@@ -57,6 +57,12 @@ def read_file(file_name):
 # ================= UPLOAD FILE =================
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
+await update.message.reply_text("⏳ Memproses file...")
+
+for i, row in enumerate(df.itertuples(index=False)):
+    if i % 1000 == 0:
+        print(f"{i} rows processed")
+
         print("📥 FILE MASUK")
 
         file = await update.message.document.get_file()
@@ -81,7 +87,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         inserted = 0
 
         # ================= PARSER =================
-        for _, row in df.iterrows():
+        for row in df.itertuples(index=False):
             account = ""
             email = ""
             nama = ""

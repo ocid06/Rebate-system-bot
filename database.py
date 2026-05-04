@@ -5,7 +5,10 @@ class Database:
     def __init__(self):
         db_url = os.getenv("DATABASE_URL")
 
-        if db_url.startswith("postgres://"):
+        if not db_url:
+raise ValueError("DATABASE_URL belum masuk ke Railway")
+
+if db_url.startswith("postgres://"):
             db_url = db_url.replace("postgres://", "postgresql://", 1)
 
         self.conn = psycopg2.connect(db_url)
